@@ -99,6 +99,11 @@ export class DualMcpServer {
     const existingSessionId = headerString(req.headers['mcp-session-id']);
     let session = existingSessionId ? this.httpSessions.get(existingSessionId) : undefined;
 
+    if (session && session.token !== token) {
+      respondJson(res, 403, { error: 'session/token mismatch' });
+      return;
+    }
+
     if (!session) {
       // New session: create a fresh Server + transport per PoC-2 pattern
       const server = new Server(
