@@ -6,6 +6,8 @@
 
 通过飞书（Lark）与 Claude Code 实时聊天。本地文件记忆、定时任务、富媒体支持。
 
+> **⚠️ 升级到 v2.0.0？** v2 作为新插件 `lark-v2` 发布（架构改为：每条消息 fork 独立的 `claude -p` headless 子进程，替代嵌入式 MCP channel）。它和 v1.x 共享同一份 `~/.claude/channels/lark/` 数据目录，所以**启用 `lark-v2` 之前先禁用或卸载 `lark` 插件** —— 同时启用会争抢同一份 config / memory / jobs / 锁。完整迁移步骤见 [v2 设计文档](docs/superpowers/specs/2026-06-28-headless-fork-session-isolation-design.md) § 8。
+
 ---
 
 ## 工作原理

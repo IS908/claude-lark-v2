@@ -6,6 +6,8 @@
 
 Chat with Claude Code in real time through Feishu (Lark). Local-file memory, scheduled jobs, rich media support.
 
+> **⚠️ Upgrading to v2.0.0?** v2 ships as a renamed plugin `lark-v2` (architecture change: per-message headless `claude -p` fork instead of embedded MCP channel). It shares the same `~/.claude/channels/lark/` data directory as v1.x, so **disable or uninstall the `lark` plugin before enabling `lark-v2`** — concurrent usage will fight over the same config / memory / jobs / locks. See [v2 design spec](docs/superpowers/specs/2026-06-28-headless-fork-session-isolation-design.md) § 8 for the full migration steps.
+
 ---
 
 ## How It Works
