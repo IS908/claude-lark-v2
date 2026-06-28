@@ -37,12 +37,15 @@ export class HeadlessWatchdog {
     const t = now ?? this.nowFn();
     for (const o of this.opts.tracker.list()) {
       if (o.closed) continue;
-      if (t > o.absoluteDeadline) {
-        await this.opts.onFallback(o.turnId, 'timeout_absolute');
-        continue;
-      }
-      if (t - o.lastStreamEventAt > o.idleTimeoutMs) {
-        await this.opts.onFallback(o.turnId, 'timeout_idle');
+      try {
+        if (t > o.absoluteDeadline) {
+          await this.opts.onFallback(o.turnId, 'timeout_absolute');
+        } else if (t - o.lastStreamEventAt > o.idleTimeoutMs) {
+          await this.opts.onFallback(o.turnId, 'timeout_idle');
+        }
+      } catch (err) {
+        // A single fallback failure must not abort the rest of the tick.
+        console.error('[watchdog] onFallback error for turn', o.turnId, err);
       }
     }
   }

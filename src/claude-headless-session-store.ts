@@ -40,7 +40,15 @@ export class HeadlessSessionStore {
     const k = keyOf(chatId, threadId);
     this.cache.set(k, entry);
     // Serialize writes; chain on writeLock.
-    this.writeLock = this.writeLock.then(() => this.flush()).catch(() => this.flush());
+    // IMPORTANT: .catch() must resolve (not re-throw) so the chain stays alive.
+    // If .catch() throws, writeLock becomes permanently rejected and all future
+    // set() calls silently drop to disk — data loss with no visible error.
+    this.writeLock = this.writeLock
+      .then(() => this.flush())
+      .catch((err) => {
+        console.error('[session-store] flush error, skipping:', err);
+        // Do not re-throw — keep the chain resolved.
+      });
     await this.writeLock;
   }
 

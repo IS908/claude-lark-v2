@@ -75,7 +75,12 @@ export class HeadlessConfigManager {
       input.now,
     );
     const prior = this.opts.sessionStore.get(input.chatId, input.threadId);
-    const env: NodeJS.ProcessEnv = { ...process.env, LARK_CHILD_TOKEN: token };
+    // Strip Feishu credentials before passing env to child process.
+    // Spec §3.2 Invariant 1: "Feishu credentials live only in the parent process."
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { LARK_APP_ID, LARK_APP_SECRET, LARK_OWNER_OPEN_ID,
+            LARK_APP_ID_V2, LARK_APP_SECRET_V2, ...safeEnv } = process.env;
+    const env: NodeJS.ProcessEnv = { ...safeEnv, LARK_CHILD_TOKEN: token };
     return {
       sid: prior?.sid ?? null,
       token,

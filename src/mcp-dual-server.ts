@@ -12,7 +12,8 @@ export interface DualServerOptions {
   registerTools: RegisterTools;
   tokenMap: SessionTokenMap;
   httpPort: number;
-  httpBind: string;
+  /** Bind address for the HTTP server. Defaults to '127.0.0.1' in start(). */
+  httpBind?: string;
   /** Set false in unit tests to skip process.stdin connect (avoids test runner hang). Default: true */
   enableStdio?: boolean;
 }
@@ -55,8 +56,10 @@ export class DualMcpServer {
       });
     });
 
+    // Default to loopback to prevent accidental LAN exposure if caller omits httpBind.
+    const bind = this.opts.httpBind ?? '127.0.0.1';
     await new Promise<void>((resolve) => {
-      this.httpServer!.listen(this.opts.httpPort, this.opts.httpBind, () => resolve());
+      this.httpServer!.listen(this.opts.httpPort, bind, () => resolve());
     });
     const httpPort = (this.httpServer.address() as AddressInfo).port;
 

@@ -38,9 +38,11 @@ interface ResultEvent {
 
 export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
   const bin = opts.binary ?? process.env.CLAUDE_BIN ?? 'claude';
+  // NOTE: --strict-mcp-config was tested in PoC-5 (2026-06-28) and found ineffective
+  // on current Claude Code builds. MCP isolation relies solely on env/cwd context
+  // prepared by HeadlessConfigManager. Do not add it back without re-verifying.
   const args: string[] = [
     '-p',
-    '--strict-mcp-config',
     '--mcp-config', opts.ctx.mcpConfigPath,
     '--append-system-prompt', opts.ctx.appendSystemPromptPath,
     '--dangerously-skip-permissions',
