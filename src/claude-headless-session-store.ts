@@ -8,7 +8,7 @@ export interface SessionEntry {
 }
 
 function keyOf(chatId: string, threadId: string | null): string {
-  return threadId == null ? `${chatId}__null__` : `${chatId}${threadId}`;
+  return threadId == null ? `${chatId}\x00__null__` : `${chatId}\x00${threadId}`;
 }
 
 export class HeadlessSessionStore {
