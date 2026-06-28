@@ -47,6 +47,16 @@ npx tsx scripts/check-sdk-loggers.ts
 echo "PASS"
 
 echo ""
+echo "=== Unit tests (node:test) ==="
+TEST_FILES=$(find tests -name '*.test.ts' -type f 2>/dev/null || true)
+if [ -n "$TEST_FILES" ]; then
+  node --import tsx --test $TEST_FILES
+else
+  echo "no unit test files"
+fi
+echo "PASS"
+
+echo ""
 echo "=== Card builder unit checks ==="
 npx tsx scripts/card-smoke.ts
 
