@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "lark": {
+    "lark-v2": {
       "command": "npm",
       "args": ["run", "--silent", "--prefix", "${CLAUDE_PLUGIN_ROOT}", "start"]
     }
