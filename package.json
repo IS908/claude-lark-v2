@@ -9,7 +9,8 @@
     "start": "tsx src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "bash scripts/test.sh"
+    "test": "bash scripts/test.sh",
+    "test:unit": "find tests -name '*.test.ts' -type f -print0 | xargs -0 node --import tsx --test"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.60.0",
