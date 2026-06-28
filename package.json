@@ -1,7 +1,7 @@
 {
-  "name": "claude-lark-plugin",
+  "name": "claude-lark-v2",
   "version": "1.3.2",
-  "description": "Claude Code channel plugin for Feishu/Lark — chat with Claude through Feishu with local-file memory and scheduled jobs",
+  "description": "Claude Code channel plugin for Feishu/Lark (v2 fork architecture) — per-message headless claude -p subprocess, local-file memory, scheduled jobs",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {

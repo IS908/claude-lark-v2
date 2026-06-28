@@ -13,7 +13,7 @@
 ## 工作原理
 
 ```
-飞书用户 ──> 飞书开放平台 ──WebSocket──> claude-lark-plugin (MCP Server) ──> Claude Code
+飞书用户 ──> 飞书开放平台 ──WebSocket──> claude-lark-v2 (MCP Server) ──> Claude Code
                                                   <── 回复 / 编辑 / 表情 ──<
 ```
 
@@ -92,23 +92,23 @@
 在 Claude Code 中执行以下命令：
 
 ```text
-/plugin marketplace add https://github.com/IS908/claude-lark-plugin.git
-/plugin install lark@claude-lark-plugin
+/plugin marketplace add https://github.com/IS908/claude-lark-v2.git
+/plugin install lark-v2@claude-lark-v2
 /reload-plugins
 ```
 
 **从源码安装（开发用）：**
 
 ```bash
-git clone https://github.com/IS908/claude-lark-plugin.git
-cd claude-lark-plugin
+git clone https://github.com/IS908/claude-lark-v2.git
+cd claude-lark-v2
 npm install
 ```
 
 然后启动 Claude Code 时手动加载插件：
 
 ```bash
-claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
+claude --dangerously-load-development-channels plugin:lark-v2@claude-lark-v2
 ```
 
 可选：安装 [lark-cli](https://github.com/larksuite/cli) 以获取完整飞书 API 能力（日历、文档、表格、任务、通讯录等）：
@@ -151,7 +151,7 @@ EOF
 bash scripts/start.sh
 
 # 从源码安装的：
-claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
+claude --dangerously-load-development-channels plugin:lark-v2@claude-lark-v2
 ```
 
 ### 更新插件
@@ -159,14 +159,14 @@ claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
 **插件市场：**
 
 ```text
-/plugin update lark@claude-lark-plugin
+/plugin update lark-v2@claude-lark-v2
 /reload-plugins
 ```
 
 **从源码：**
 
 ```bash
-cd claude-lark-plugin
+cd claude-lark-v2
 git pull
 npm install
 ```

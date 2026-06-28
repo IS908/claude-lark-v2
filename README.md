@@ -13,7 +13,7 @@ Chat with Claude Code in real time through Feishu (Lark). Local-file memory, sch
 ## How It Works
 
 ```
-Feishu User ──> Feishu Open Platform ──WebSocket──> claude-lark-plugin (MCP Server) ──> Claude Code
+Feishu User ──> Feishu Open Platform ──WebSocket──> claude-lark-v2 (MCP Server) ──> Claude Code
                                                           <── reply / edit / react ──<
 ```
 
@@ -112,23 +112,23 @@ Enable the WebSocket mode under **Event Subscriptions** and subscribe to these e
 Run the following commands inside Claude Code:
 
 ```text
-/plugin marketplace add https://github.com/IS908/claude-lark-plugin.git
-/plugin install lark@claude-lark-plugin
+/plugin marketplace add https://github.com/IS908/claude-lark-v2.git
+/plugin install lark-v2@claude-lark-v2
 /reload-plugins
 ```
 
 **From source (for development):**
 
 ```bash
-git clone https://github.com/IS908/claude-lark-plugin.git
-cd claude-lark-plugin
+git clone https://github.com/IS908/claude-lark-v2.git
+cd claude-lark-v2
 npm install
 ```
 
 Then load the plugin manually when starting Claude Code:
 
 ```bash
-claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
+claude --dangerously-load-development-channels plugin:lark-v2@claude-lark-v2
 ```
 
 Optionally, install [lark-cli](https://github.com/larksuite/cli) for full Feishu API access (calendar, docs, sheets, tasks, contacts, etc.):
@@ -170,7 +170,7 @@ If installed via the plugin marketplace, the plugin starts automatically when Cl
 
 ```bash
 # If installed from source:
-claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
+claude --dangerously-load-development-channels plugin:lark-v2@claude-lark-v2
 ```
 
 ### Updating
@@ -178,14 +178,14 @@ claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
 **Plugin marketplace:**
 
 ```text
-/plugin update lark@claude-lark-plugin
+/plugin update lark-v2@claude-lark-v2
 /reload-plugins
 ```
 
 **From source:**
 
 ```bash
-cd claude-lark-plugin
+cd claude-lark-v2
 git pull
 ```
 

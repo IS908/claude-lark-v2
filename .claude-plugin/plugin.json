@@ -5,8 +5,8 @@
   "author": {
     "name": "IS908"
   },
-  "repository": "https://github.com/IS908/claude-lark-plugin",
-  "homepage": "https://github.com/IS908/claude-lark-plugin",
+  "repository": "https://github.com/IS908/claude-lark-v2",
+  "homepage": "https://github.com/IS908/claude-lark-v2",
   "license": "Apache-2.0",
   "keywords": ["feishu", "lark", "im", "bot", "chat", "lite-memory"],
   "hooks": {
