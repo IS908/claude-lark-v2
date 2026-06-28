@@ -136,3 +136,75 @@ test('handleFallback wires watchdog timeout to handler', async () => {
     tmp.cleanup();
   }
 });
+
+test('handleFallback aborts in-flight runner and deliver() resolves (I-NEW-1)', async () => {
+  const tmp = makeTmpDir('deliv-4');
+  try {
+    const { store, config } = makeSetup(tmp.path);
+    await store.load();
+    const tracker = new TurnObligationTracker();
+    const calls: string[] = [];
+    const handler: FallbackHandler = {
+      onAbsoluteTimeout: async () => { calls.push('abs'); },
+      onIdleTimeout: async () => { calls.push('idle'); },
+      onCrash: async () => { calls.push('crash'); },
+      onSuccess: async () => { calls.push('success'); },
+    };
+
+    // Latch: resolves once fakeRunner is entered so the test knows the
+    // AbortController has been registered in deliver().
+    let signalRunnerStarted!: () => void;
+    const runnerStarted = new Promise<void>((r) => { signalRunnerStarted = r; });
+
+    // Runner that stays pending until abortSignal fires.
+    const fakeRunner = async (opts: { abortSignal?: AbortSignal }): Promise<RunResult> => {
+      signalRunnerStarted();
+      return new Promise((resolve) => {
+        const onAbort = () => {
+          resolve({
+            sessionId: null, usage: null, finalText: null,
+            exitCode: null, signal: 'SIGTERM', stderr: 'aborted', errorClass: 'crash',
+          });
+        };
+        if (opts.abortSignal?.aborted) {
+          onAbort();
+        } else {
+          opts.abortSignal?.addEventListener('abort', onAbort, { once: true });
+        }
+      });
+    };
+
+    const delivery = new HeadlessDelivery({
+      tracker, sessionStore: store, config,
+      runner: fakeRunner as any,
+      semaphore: { acquire: async () => () => {} },
+      envelope: () => 'envelope',
+      handler,
+      turnIdFactory: () => 'T-AB',
+    });
+
+    // Start deliver() — it will block inside fakeRunner until abort.
+    const deliverPromise = delivery.deliver(turn);
+
+    // Wait until the runner is actually executing (AbortController is now registered).
+    await runnerStarted;
+
+    const ac = (delivery as any).abortControllers.get('T-AB') as AbortController | undefined;
+    assert.ok(ac, 'AbortController must be registered while runner is in-flight');
+    assert.equal(ac.signal.aborted, false);
+
+    // Trigger watchdog timeout — this should abort the runner.
+    await delivery.handleFallback('T-AB', 'timeout_absolute');
+
+    // deliver() must resolve (not hang) once abort fires.
+    await deliverPromise;
+
+    assert.ok(ac.signal.aborted, 'abort signal must have been triggered');
+    assert.deepEqual(calls, ['abs']);
+
+    // abortControllers map must be cleaned up by the finally block in deliver().
+    assert.equal((delivery as any).abortControllers.has('T-AB'), false);
+  } finally {
+    tmp.cleanup();
+  }
+});

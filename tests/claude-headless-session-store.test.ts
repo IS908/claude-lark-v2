@@ -63,3 +63,37 @@ test('concurrent set on same key serializes', async () => {
     tmp.cleanup();
   }
 });
+
+test('writeLock chain survives a flush error — subsequent set() still works (C-2 regression)', async () => {
+  // Verifies: if flush() throws, the .catch() in set() swallows the error so
+  // writeLock stays resolved. A future set() must NOT be silently dropped.
+  const tmp = makeTmpDir('store-5');
+  try {
+    const store = new HeadlessSessionStore(join(tmp.path, 'sessions.json'));
+    await store.load();
+
+    // Monkey-patch flush: first call throws, second succeeds.
+    let flushCount = 0;
+    const realFlush = (store as any).flush.bind(store);
+    (store as any).flush = async () => {
+      flushCount++;
+      if (flushCount === 1) throw new Error('simulated EACCES');
+      return realFlush();
+    };
+
+    // First set — flush throws, but .catch() swallows it; await must NOT throw.
+    await store.set('A', null, { sid: 'sa', lastSuccessAt: 1, lastBotMessageId: null });
+
+    // Second set — the writeLock chain must NOT be permanently broken.
+    await store.set('B', null, { sid: 'sb', lastSuccessAt: 2, lastBotMessageId: null });
+
+    // Both entries must be in cache (the in-memory write always happens before flush).
+    assert.equal(store.get('A', null)?.sid, 'sa');
+    assert.equal(store.get('B', null)?.sid, 'sb');
+
+    // Both flush attempts must have been made (not short-circuited).
+    assert.equal(flushCount, 2);
+  } finally {
+    tmp.cleanup();
+  }
+});

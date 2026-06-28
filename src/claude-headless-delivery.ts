@@ -34,6 +34,8 @@ export class HeadlessDelivery {
   private readonly turnIdFactory: () => string;
   // turnMap is package-internal for watchdog wiring; accessed by handleFallback and tests.
   readonly turnMap = new Map<string, InboundTurn>();
+  // abortControllers lets handleFallback SIGTERM the in-flight runner on watchdog timeout.
+  private readonly abortControllers = new Map<string, AbortController>();
 
   constructor(private readonly opts: DeliveryOptions) {
     this.runner = opts.runner ?? runHeadlessClaude;
@@ -68,10 +70,14 @@ export class HeadlessDelivery {
         requireReply: turn.requireReply,
       });
 
+      const ac = new AbortController();
+      this.abortControllers.set(turnId, ac);
+
       const result = await this.runner({
         ctx,
         envelope: this.opts.envelope(turn),
         turnId,
+        abortSignal: ac.signal,
         onStreamEvent: () => {
           this.opts.tracker.touchStreamEvent(turnId, this.nowFn());
         },
@@ -101,6 +107,7 @@ export class HeadlessDelivery {
       this.opts.config.releaseSpawn(spawnToken);
       release();
       this.turnMap.delete(turnId);
+      this.abortControllers.delete(turnId);
     }
   }
 
@@ -109,10 +116,15 @@ export class HeadlessDelivery {
     if (!turn) return;
     if (reason === 'timeout_absolute') {
       if (this.opts.tracker.tryCloseFailed(turnId, reason)) {
+        // Abort the in-flight runner (SIGTERM → SIGKILL) so the subprocess exits
+        // and the semaphore slot is released. Must run after tryCloseFailed so the
+        // obligation state is updated before the runner's finally block fires.
+        this.abortControllers.get(turnId)?.abort();
         await this.opts.handler.onAbsoluteTimeout(turn);
       }
     } else {
       if (this.opts.tracker.tryCloseFailed(turnId, reason)) {
+        this.abortControllers.get(turnId)?.abort();
         await this.opts.handler.onIdleTimeout(turn);
       }
     }
