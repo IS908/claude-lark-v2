@@ -22,7 +22,10 @@ class FileTurnLogWriter implements TurnLogWriter {
 }
 
 function sanitizeSegment(s: string): string {
-  return s.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 128) || '_';
+  const cleaned = s.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 128) || '_';
+  // Reject pure-dot segments (., .., ...) to prevent path traversal
+  if (/^\.+$/.test(cleaned)) return '_';
+  return cleaned;
 }
 
 export class PerTurnLogger {

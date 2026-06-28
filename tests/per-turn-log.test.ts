@@ -48,3 +48,29 @@ test('multiple appends after close are no-op', async () => {
     tmp.cleanup();
   }
 });
+
+test('sanitizeSegment rejects dot-only segments to prevent path traversal', async () => {
+  const tmp = makeTmpDir('per-turn-log');
+  try {
+    const logger = new PerTurnLogger(tmp.path);
+
+    // Test single dot
+    const w1 = logger.open('.', null, 1);
+    assert.ok(w1.path.includes('_'), 'single dot should be sanitized to underscore');
+    assert.ok(!w1.path.includes('/./"'), 'path should not contain /./');
+    await w1.close();
+
+    // Test double dot (path traversal attempt)
+    const w2 = logger.open('..', 'thread-x', 2);
+    assert.ok(w2.path.includes('_'), 'double dot should be sanitized to underscore');
+    assert.ok(!w2.path.includes('/../'), 'path should not contain /../');
+    await w2.close();
+
+    // Test triple dot
+    const w3 = logger.open('chat', '...', 3);
+    assert.ok(w3.path.includes('_'), 'triple dot should be sanitized to underscore');
+    await w3.close();
+  } finally {
+    tmp.cleanup();
+  }
+});
