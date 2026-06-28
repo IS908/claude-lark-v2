@@ -2,6 +2,9 @@ import { spawn } from 'node:child_process';
 import type { SpawnContext } from './claude-headless-config.js';
 import { classifyExit, type ErrorClass } from './claude-headless-error.js';
 
+/** Default cap on a single un-newline-terminated stdout run (10 MiB). */
+const DEFAULT_MAX_STDOUT_LINE_BYTES = 10 * 1024 * 1024;
+
 export interface StreamEvent {
   type: string;
   raw: unknown;
@@ -26,6 +29,8 @@ export interface RunOptions {
   onStreamEvent?: (e: StreamEvent) => void;
   onStderr?: (chunk: string) => void;
   abortSignal?: AbortSignal;
+  /** Single-line stdout cap in bytes. Default 10 MiB. Set lower in tests. */
+  maxStdoutLineBytes?: number;
 }
 
 interface ResultEvent {
@@ -62,6 +67,8 @@ export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  const maxLineBytes = opts.maxStdoutLineBytes ?? DEFAULT_MAX_STDOUT_LINE_BYTES;
+
   let sessionId: string | null = null;
   let usage: unknown | null = null;
   let finalText: string | null = null;
@@ -85,6 +92,13 @@ export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
 
   child.stdout?.on('data', (chunk: string) => {
     stdoutBuf += chunk;
+    // Cap: if a single un-terminated run exceeds maxLineBytes, kill immediately to avoid OOM.
+    if (stdoutBuf.length > maxLineBytes && stdoutBuf.indexOf('\n') < 0) {
+      stderrBuf += `\n[runner] stdout single line exceeded ${maxLineBytes} bytes; killing child\n`;
+      stdoutBuf = ''; // free memory before kill
+      try { child.kill('SIGKILL'); } catch { /* ignore */ }
+      return;
+    }
     let idx: number;
     while ((idx = stdoutBuf.indexOf('\n')) >= 0) {
       const line = stdoutBuf.slice(0, idx);

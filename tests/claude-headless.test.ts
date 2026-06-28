@@ -95,3 +95,32 @@ test('idle timeout via abortSignal kills child', async () => {
     tmp.cleanup();
   }
 });
+
+test('stdoutBuf single-line cap kills child and results in crash', async () => {
+  const tmp = makeTmpDir('runner-4');
+  try {
+    // Fake binary that writes 2000 bytes of 'A' with no newline, then exits cleanly.
+    // With maxStdoutLineBytes=1024 the cap triggers before the process exits.
+    const bin = join(tmp.path, 'bigline');
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env bash\npython3 -c "import sys; sys.stdout.write('A' * 2000); sys.stdout.flush()"\nexit 0\n`,
+    );
+    chmodSync(bin, 0o755);
+    const res = await runHeadlessClaude({
+      ctx: fakeCtx(tmp.path),
+      envelope: '',
+      turnId: 'T4',
+      binary: bin,
+      maxStdoutLineBytes: 1024,
+    });
+    // Child is killed via SIGKILL; classifyExit maps that to 'crash'.
+    assert.equal(res.errorClass, 'crash', `expected crash, got ${res.errorClass} (stderr: ${res.stderr})`);
+    assert.ok(
+      res.stderr.includes('exceeded'),
+      `expected "exceeded" in stderr, got: ${res.stderr}`,
+    );
+  } finally {
+    tmp.cleanup();
+  }
+});
