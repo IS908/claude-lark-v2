@@ -102,6 +102,72 @@ test('crash result fires onCrash and does NOT update sessionStore', async () => 
   }
 });
 
+test('unexpected runner throw closes obligation as failed (no watchdog zombie)', async () => {
+  const tmp = makeTmpDir('deliv-throw');
+  try {
+    const { store, config } = makeSetup(tmp.path);
+    await store.load();
+    const tracker = new TurnObligationTracker();
+    const handler: FallbackHandler = {
+      onAbsoluteTimeout: async () => {},
+      onIdleTimeout: async () => {},
+      onCrash: async () => {},
+      onSuccess: async () => {},
+    };
+    const fakeRunner = async (): Promise<RunResult> => {
+      throw new Error('runner exploded');
+    };
+    const delivery = new HeadlessDelivery({
+      tracker, sessionStore: store, config,
+      runner: fakeRunner as any,
+      semaphore: { acquire: async () => () => {} },
+      envelope: () => 'envelope',
+      handler,
+      turnIdFactory: () => 'T-EX',
+    });
+    await assert.rejects(() => delivery.deliver(turn), /runner exploded/);
+    const o = tracker.get('T-EX');
+    assert.equal(o?.closed, true, 'obligation must be closed after unexpected throw');
+    assert.equal(o?.success, false);
+    assert.ok(o?.reason?.includes('unexpected'), `reason should mark unexpected error, got: ${o?.reason}`);
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+test('handleFallback with missing turn still closes an open obligation', async () => {
+  const tmp = makeTmpDir('deliv-orphan');
+  try {
+    const { store, config } = makeSetup(tmp.path);
+    await store.load();
+    const tracker = new TurnObligationTracker();
+    tracker.open({
+      turnId: 'T-ORPHAN', chatId: 'C', threadId: null, openId: 'U',
+      startedAt: 0, absoluteDeadline: 100, idleTimeoutMs: 50, requireReply: true,
+    });
+    const calls: string[] = [];
+    const handler: FallbackHandler = {
+      onAbsoluteTimeout: async () => { calls.push('abs'); },
+      onIdleTimeout: async () => { calls.push('idle'); },
+      onCrash: async () => { calls.push('crash'); },
+      onSuccess: async () => { calls.push('success'); },
+    };
+    const delivery = new HeadlessDelivery({
+      tracker, sessionStore: store, config,
+      runner: (async () => ({} as RunResult)) as any,
+      semaphore: { acquire: async () => () => {} },
+      envelope: () => 'env',
+      handler,
+    });
+    // turnMap deliberately does NOT contain T-ORPHAN.
+    await delivery.handleFallback('T-ORPHAN', 'timeout_absolute');
+    assert.equal(tracker.get('T-ORPHAN')?.closed, true, 'orphan obligation must be closed');
+    assert.deepEqual(calls, [], 'no handler fires without a turn to act on');
+  } finally {
+    tmp.cleanup();
+  }
+});
+
 test('handleFallback wires watchdog timeout to handler', async () => {
   const tmp = makeTmpDir('deliv-3');
   try {

@@ -73,32 +73,41 @@ export class HeadlessDelivery {
       const ac = new AbortController();
       this.abortControllers.set(turnId, ac);
 
-      const result = await this.runner({
-        ctx,
-        envelope: this.opts.envelope(turn),
-        turnId,
-        abortSignal: ac.signal,
-        onStreamEvent: () => {
-          this.opts.tracker.touchStreamEvent(turnId, this.nowFn());
-        },
-      });
+      try {
+        const result = await this.runner({
+          ctx,
+          envelope: this.opts.envelope(turn),
+          turnId,
+          abortSignal: ac.signal,
+          onStreamEvent: () => {
+            this.opts.tracker.touchStreamEvent(turnId, this.nowFn());
+          },
+        });
 
-      if (result.errorClass === 'crash' || result.errorClass === 'internal') {
-        if (this.opts.tracker.tryCloseFailed(turnId, result.errorClass)) {
-          await this.opts.handler.onCrash(turn, result);
-        }
-      } else {
-        // errorClass === 'unknown' => success path (runner may return 'unknown' for clean exits)
-        if (this.opts.tracker.tryCloseSuccess(turnId, result.sessionId)) {
-          if (result.sessionId) {
-            await this.opts.sessionStore.set(turn.chatId, turn.threadId, {
-              sid: result.sessionId,
-              lastSuccessAt: this.nowFn(),
-              lastBotMessageId: this.opts.tracker.get(turnId)?.lastMessageId ?? null,
-            });
+        if (result.errorClass === 'crash' || result.errorClass === 'internal') {
+          if (this.opts.tracker.tryCloseFailed(turnId, result.errorClass)) {
+            await this.opts.handler.onCrash(turn, result);
           }
-          await this.opts.handler.onSuccess(turn, result);
+        } else {
+          // errorClass === 'unknown' => success path (runner may return 'unknown' for clean exits)
+          if (this.opts.tracker.tryCloseSuccess(turnId, result.sessionId)) {
+            if (result.sessionId) {
+              await this.opts.sessionStore.set(turn.chatId, turn.threadId, {
+                sid: result.sessionId,
+                lastSuccessAt: this.nowFn(),
+                lastBotMessageId: this.opts.tracker.get(turnId)?.lastMessageId ?? null,
+              });
+            }
+            await this.opts.handler.onSuccess(turn, result);
+          }
         }
+      } catch (err) {
+        // An unexpected throw (runner bug, store I/O, handler failure) must not
+        // leave the obligation open forever: the finally block below deletes
+        // turnMap, so a later watchdog fallback would no-op and the open
+        // obligation would make every tick fire until process restart.
+        this.opts.tracker.tryCloseFailed(turnId, `unexpected: ${String(err)}`);
+        throw err;
       }
     } finally {
       // releaseSpawn is keyed by token. M1: spawnToken is set after prepareSpawn succeeds.
@@ -113,7 +122,13 @@ export class HeadlessDelivery {
 
   async handleFallback(turnId: string, reason: 'timeout_absolute' | 'timeout_idle'): Promise<void> {
     const turn = this.turnMap.get(turnId);
-    if (!turn) return;
+    if (!turn) {
+      // Defensive: the turn is gone from turnMap but the obligation may still
+      // be open (e.g. crash between open() and the deliver catch). Close it so
+      // the watchdog does not re-fire on it every tick.
+      this.opts.tracker.tryCloseFailed(turnId, reason);
+      return;
+    }
     if (reason === 'timeout_absolute') {
       if (this.opts.tracker.tryCloseFailed(turnId, reason)) {
         // Abort the in-flight runner (SIGTERM → SIGKILL) so the subprocess exits

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { SpawnContext } from './claude-headless-config.js';
 import { classifyExit, type ErrorClass } from './claude-headless-error.js';
+import { loadAppendSystemPrompt } from './claude-headless-prompts.js';
 
 /** Default cap on a single un-newline-terminated stdout run (10 MiB). */
 const DEFAULT_MAX_STDOUT_LINE_BYTES = 10 * 1024 * 1024;
@@ -43,13 +44,16 @@ interface ResultEvent {
 
 export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
   const bin = opts.binary ?? process.env.CLAUDE_BIN ?? 'claude';
+  // --append-system-prompt takes prompt TEXT, not a file path — load the file
+  // content (falls back to the inline routing prompt on ENOENT).
+  const appendPrompt = await loadAppendSystemPrompt(opts.ctx.appendSystemPromptPath);
   // NOTE: --strict-mcp-config was tested in PoC-5 (2026-06-28) and found ineffective
   // on current Claude Code builds. MCP isolation relies solely on env/cwd context
   // prepared by HeadlessConfigManager. Do not add it back without re-verifying.
   const args: string[] = [
     '-p',
     '--mcp-config', opts.ctx.mcpConfigPath,
-    '--append-system-prompt', opts.ctx.appendSystemPromptPath,
+    '--append-system-prompt', appendPrompt,
     '--dangerously-skip-permissions',
     '--output-format', 'stream-json',
     '--input-format', 'text',
@@ -77,7 +81,8 @@ export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
 
   const abortHandler = () => {
     try { child.kill('SIGTERM'); } catch { /* ignore */ }
-    setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* ignore */ } }, 1500);
+    const killTimer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* ignore */ } }, 1500);
+    killTimer.unref?.();
   };
   if (opts.abortSignal) {
     if (opts.abortSignal.aborted) {
@@ -126,9 +131,16 @@ export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
     opts.onStderr?.(chunk);
   });
 
+  let spawnError: Error | null = null;
   const { code, signal } = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
     child.on('close', (c, s) => resolve({ code: c, signal: s as NodeJS.Signals | null }));
-    child.on('error', () => resolve({ code: null, signal: null }));
+    child.on('error', (err) => {
+      // Spawn failure (e.g. binary not found): 'close' may never fire.
+      // Must NOT fall through to classifyExit(null, null, …) === 'unknown',
+      // which the delivery layer treats as success.
+      spawnError = err;
+      resolve({ code: null, signal: null });
+    });
   });
 
   // Clean up abort listener if still registered
@@ -136,7 +148,10 @@ export async function runHeadlessClaude(opts: RunOptions): Promise<RunResult> {
     opts.abortSignal.removeEventListener('abort', abortHandler);
   }
 
-  const errorClass = classifyExit(code, signal, stderrBuf);
+  if (spawnError) {
+    stderrBuf += `\n[runner] spawn error: ${(spawnError as Error).message}\n`;
+  }
+  const errorClass = spawnError ? 'internal' : classifyExit(code, signal, stderrBuf);
 
   return {
     sessionId,

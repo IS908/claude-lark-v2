@@ -142,6 +142,34 @@ test('prepareSpawn env does not contain Feishu credentials (C-1 regression)', as
   }
 });
 
+test('token TTL is clamped to at least the absolute timeout', async () => {
+  const tmp = makeTmpDir('hcfg-ttl');
+  try {
+    const cwd = join(tmp.path, 'headless-cwd');
+    const store = new HeadlessSessionStore(join(tmp.path, 's.json'));
+    await store.load();
+    const tokenMap = new SessionTokenMap();
+    const mgr = new HeadlessConfigManager({
+      headlessCwd: cwd,
+      httpUrl: 'http://127.0.0.1:38291/mcp',
+      sessionStore: store,
+      tokenMap,
+      promptPath: '/nope.md',
+      tokenTtlMs: 1_000, // misconfigured: shorter than the turn's absolute timeout
+      absoluteTimeoutMs: 1_800_000,
+      idleTimeoutMs: 300_000,
+      nonceFactory: () => 'ttl-nonce',
+    });
+    await mgr.ensureCwd();
+    await mgr.prepareSpawn({ chatId: 'C', threadId: null, openId: 'U', now: 0 });
+    // Late in the turn (past tokenTtlMs but within absoluteTimeoutMs) the
+    // child's MCP calls must still authenticate.
+    assert.notEqual(tokenMap.resolve('ttl-nonce', 1_700_000), null, 'token must survive the whole turn');
+  } finally {
+    tmp.cleanup();
+  }
+});
+
 test('releaseSpawn revokes token', async () => {
   const tmp = makeTmpDir('hcfg-4');
   try {

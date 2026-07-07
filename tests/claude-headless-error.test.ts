@@ -22,6 +22,10 @@ test('OOM marker in stderr classifies as crash regardless of exit', () => {
   assert.equal(classifyExit(1, null, 'JavaScript heap out of memory'), 'crash');
 });
 
+test('clean exit 0 with benign "killed" noise in stderr is NOT a crash', () => {
+  assert.equal(classifyExit(0, null, 'debug: watchdog killed stale cache entry'), 'unknown');
+});
+
 test('classifyTimeout maps cleanly', () => {
   assert.equal(classifyTimeout('absolute'), 'timeout_absolute');
   assert.equal(classifyTimeout('idle'), 'timeout_idle');

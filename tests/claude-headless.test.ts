@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { writeFileSync, chmodSync } from 'node:fs';
+import { writeFileSync, chmodSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeTmpDir } from './_setup.js';
 import { runHeadlessClaude } from '../src/claude-headless.js';
@@ -91,6 +91,47 @@ test('idle timeout via abortSignal kills child', async () => {
     });
     assert.ok(res.signal === 'SIGTERM' || res.signal === 'SIGKILL' || (res.exitCode != null && res.exitCode !== 0));
     assert.equal(res.errorClass, 'crash');
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+test('spawn failure (missing binary) classifies as internal, not success', async () => {
+  const tmp = makeTmpDir('runner-5');
+  try {
+    const res = await runHeadlessClaude({
+      ctx: fakeCtx(tmp.path),
+      envelope: '',
+      turnId: 'T5',
+      binary: join(tmp.path, 'no-such-binary'),
+    });
+    assert.equal(res.errorClass, 'internal', `spawn failure must not classify as unknown/success, got ${res.errorClass}`);
+    assert.ok(res.stderr.includes('spawn error'), `expected spawn error in stderr, got: ${res.stderr}`);
+    assert.equal(res.sessionId, null);
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+test('--append-system-prompt receives prompt TEXT, not the file path', async () => {
+  const tmp = makeTmpDir('runner-6');
+  try {
+    // Fake binary dumps its argv to a file so we can inspect the actual args.
+    const bin = join(tmp.path, 'argdump');
+    writeFileSync(bin, `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > "$PWD/args.txt"\nexit 0\n`);
+    chmodSync(bin, 0o755);
+    await runHeadlessClaude({
+      ctx: fakeCtx(tmp.path), // appendSystemPromptPath: '/nope.md' (ENOENT → inline fallback)
+      envelope: 'env-text',
+      turnId: 'T6',
+      binary: bin,
+    });
+    const args = readFileSync(join(tmp.path, 'args.txt'), 'utf8');
+    assert.ok(
+      args.includes('You are responding to Feishu'),
+      `expected inline fallback prompt text in args, got: ${args.slice(0, 300)}`,
+    );
+    assert.ok(!args.includes('/nope.md'), 'the raw file path must not be passed as the prompt');
   } finally {
     tmp.cleanup();
   }

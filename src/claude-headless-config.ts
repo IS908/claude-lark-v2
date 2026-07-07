@@ -68,10 +68,13 @@ export class HeadlessConfigManager {
   async prepareSpawn(input: PrepareInput): Promise<SpawnContext> {
     if (!this.cwdReady) await this.ensureCwd();
     const token = this.nonceFactory();
+    // The token must outlive the turn: a TTL shorter than the absolute timeout
+    // would 401 the child's MCP calls mid-turn. Clamp to the longer of the two.
+    const tokenTtlMs = Math.max(this.opts.tokenTtlMs, this.opts.absoluteTimeoutMs);
     this.opts.tokenMap.register(
       token,
       { chatId: input.chatId, threadId: input.threadId, openId: input.openId },
-      this.opts.tokenTtlMs,
+      tokenTtlMs,
       input.now,
     );
     const prior = this.opts.sessionStore.get(input.chatId, input.threadId);
