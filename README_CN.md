@@ -6,12 +6,14 @@
 
 通过飞书（Lark）与 Claude Code 实时聊天。本地文件记忆、定时任务、富媒体支持。
 
+> **⚠️ 升级到 v2.0.0？** v2 作为新插件 `lark-v2` 发布（架构改为：每条消息 fork 独立的 `claude -p` headless 子进程，替代嵌入式 MCP channel）。它和 v1.x 共享同一份 `~/.claude/channels/lark/` 数据目录，所以**启用 `lark-v2` 之前先禁用或卸载 `lark` 插件** —— 同时启用会争抢同一份 config / memory / jobs / 锁。完整迁移步骤见 [v2 设计文档](docs/superpowers/specs/2026-06-28-headless-fork-session-isolation-design.md) § 8。
+
 ---
 
 ## 工作原理
 
 ```
-飞书用户 ──> 飞书开放平台 ──WebSocket──> claude-lark-plugin (MCP Server) ──> Claude Code
+飞书用户 ──> 飞书开放平台 ──WebSocket──> claude-lark-v2 (MCP Server) ──> Claude Code
                                                   <── 回复 / 编辑 / 表情 ──<
 ```
 
@@ -90,23 +92,23 @@
 在 Claude Code 中执行以下命令：
 
 ```text
-/plugin marketplace add https://github.com/IS908/claude-lark-plugin.git
-/plugin install lark@claude-lark-plugin
+/plugin marketplace add https://github.com/IS908/claude-lark-v2.git
+/plugin install lark-v2@claude-lark-v2
 /reload-plugins
 ```
 
 **从源码安装（开发用）：**
 
 ```bash
-git clone https://github.com/IS908/claude-lark-plugin.git
-cd claude-lark-plugin
+git clone https://github.com/IS908/claude-lark-v2.git
+cd claude-lark-v2
 npm install
 ```
 
 然后启动 Claude Code 时手动加载插件：
 
 ```bash
-claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
+claude --dangerously-load-development-channels plugin:lark-v2@claude-lark-v2
 ```
 
 可选：安装 [lark-cli](https://github.com/larksuite/cli) 以获取完整飞书 API 能力（日历、文档、表格、任务、通讯录等）：
@@ -149,7 +151,7 @@ EOF
 bash scripts/start.sh
 
 # 从源码安装的：
-claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
+claude --dangerously-load-development-channels plugin:lark-v2@claude-lark-v2
 ```
 
 ### 更新插件
@@ -157,14 +159,14 @@ claude --dangerously-load-development-channels plugin:lark@claude-lark-plugin
 **插件市场：**
 
 ```text
-/plugin update lark@claude-lark-plugin
+/plugin update lark-v2@claude-lark-v2
 /reload-plugins
 ```
 
 **从源码：**
 
 ```bash
-cd claude-lark-plugin
+cd claude-lark-v2
 git pull
 npm install
 ```
